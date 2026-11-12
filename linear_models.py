@@ -1,11 +1,19 @@
 import numpy as np
 
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
+
 from grader_contracts.linear_models import (
     BaselineComparisonResult,
     ClassificationInput,
     ClassificationResult,
     RegressionInput,
     RegressionResult,
+    ClassificationMetrics
 )
 
 
@@ -113,11 +121,37 @@ def sigmoid(z: np.ndarray) -> np.ndarray:
 
 
 def compare_classical_models(data: ClassificationInput) -> BaselineComparisonResult:
-    """Сравните готовые Logistic Regression, Decision Tree и KNN на одном split.
-
-    После запуска запишите реальные результаты в experiment_results.json:
+    """
     {"linear_regression":{"test_mse": число},
      "classification":{"own_logistic": {"roc_auc": ..., "accuracy": ..., "precision": ..., "recall": ..., "f1": ...},
                        "logistic_regression": {...}, "decision_tree": {...}, "knn": {...}}}.
     """
-    raise NotImplementedError
+    X_train = np.asarray(data.train_features, dtype=float)
+    y_train = np.asarray(data.train_target).ravel()
+    X_test = np.asarray(data.test_features, dtype=float)
+    y_test = np.asarray(data.test_target).ravel()
+
+    models = {
+        "logistic_regression": make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+        "decision_tree": DecisionTreeClassifier(random_state=1),
+        "knn": make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5)),
+    }
+
+    metrics = {}
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_test)[:, 1]
+        pred = model.predict(X_test)
+        metrics[name] = ClassificationMetrics(
+            roc_auc=float(roc_auc_score(y_test, proba)),
+            accuracy=float(accuracy_score(y_test, pred)),
+            precision=float(precision_score(y_test, pred)),
+            recall=float(recall_score(y_test, pred)),
+            f1=float(f1_score(y_test, pred)),
+        )
+
+    return BaselineComparisonResult(
+        logistic_regression=metrics["logistic_regression"],
+        decision_tree=metrics["decision_tree"],
+        knn=metrics["knn"],
+    )

@@ -1,10 +1,13 @@
+import json
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from grader_contracts.linear_models import ClassificationInput, RegressionInput
-from linear_models import train_linear_regression, train_logistic_classifier
+from linear_models import train_linear_regression, train_logistic_classifier, compare_classical_models
+
+from dataclasses import asdict
 
 df = pd.read_csv("Student_Performance.csv")
 df["Extracurricular Activities"] = df["Extracurricular Activities"].map({"Yes": 1, "No": 0})
@@ -16,6 +19,7 @@ X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42)
 
 res = train_linear_regression(RegressionInput(X_tr, y_tr, X_te, y_te))
 test_mse = float(np.mean((res.predictions - y_te) ** 2))
+results = {"linear_regression": {"test_mse": test_mse}}
 
 print("ЛИНЕЙНАЯ РЕГРЕССИЯ")
 print()
@@ -35,7 +39,7 @@ print()
 print(f"train MSE: {h[-1]}")
 print(f"test MSE: {test_mse}")
 
-#-----------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------
 
 credit = pd.read_csv("german.csv", sep=";")
 target = credit.columns[0]  # Creditability
@@ -52,6 +56,7 @@ metrics = {
     "recall": float(recall_score(yc_te, clf.predictions)),
     "f1": float(f1_score(yc_te, clf.predictions)),
 }
+results["classification"] = {"own_logistic": metrics}
 
 print()
 print("ЛОГИСТИЧЕСКАЯ РЕГРЕССИЯ")
@@ -74,4 +79,26 @@ print()
 
 print("Метрики на test:")
 for name, value in metrics.items():
-    print(f"  {name:10s} {value:.4f}")
+    print(f"  {name} {value}")
+
+# -----------------------------------------------------------------------------------------
+
+cmp = compare_classical_models(ClassificationInput(Xc_tr, yc_tr, Xc_te, yc_te))
+results["classification"].update({
+    "logistic_regression": asdict(cmp.logistic_regression),
+    "decision_tree": asdict(cmp.decision_tree),
+    "knn": asdict(cmp.knn),
+})
+
+print()
+print("СРАВНЕНИЕ МОДЕЛЕЙ")
+print()
+
+print("Сравнение:")
+print(f"  {'модель':22s} {'roc_auc':>8s} {'accuracy':>9s} {'precision':>10s} {'recall':>8s} {'f1':>8s}")
+for name, m in results["classification"].items():
+    print(
+        f"  {name:22s} {m['roc_auc']:8.4f} {m['accuracy']:9.4f} {m['precision']:10.4f} {m['recall']:8.4f} {m['f1']:8.4f}")
+
+with open("experiment_results.json", "w") as f:
+    json.dump(results, f, indent=2)
